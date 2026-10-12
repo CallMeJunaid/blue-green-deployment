@@ -6,6 +6,7 @@ spec:
   type: NodePort
   selector:
     app: cloudflow-dashboard
+    version: blue
   ports:
     - protocol: TCP
       port: 80

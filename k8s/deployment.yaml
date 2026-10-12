@@ -1,28 +1,44 @@
 apiVersion: apps/v1
 kind: Deployment
+
 metadata:
-  name: cloudflow-deployment
+  name: cloudflow-blue
+
 spec:
   replicas: 2
+
   selector:
     matchLabels:
       app: cloudflow-dashboard
+      version: blue
+
   template:
     metadata:
       labels:
         app: cloudflow-dashboard
+        version: blue
+
     spec:
       containers:
         - name: cloudflow-container
           image: junaid404/cloudflow-dashboard:1.0
+
+          env:
+            - name: DEPLOYMENT_COLOR
+              value: "blue"
+            - name: APP_VERSION
+              value: "1.0.0"
+
           ports:
             - containerPort: 3000
+
           readinessProbe:
             httpGet:
               path: /
               port: 3000
             initialDelaySeconds: 5
             periodSeconds: 10
+
           livenessProbe:
             httpGet:
               path: /

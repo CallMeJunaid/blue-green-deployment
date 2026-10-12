@@ -378,8 +378,39 @@ h1 { font:600 clamp(24px,3vw,32px) 'Space Grotesk',sans-serif; letter-spacing:-1
 </body>
 </html>`;
 
+
 const server = http.createServer((req, res) => {
-    if (req.url === "/favicon.ico") {
+    const pathname = new URL(req.url, "http://localhost").pathname;
+
+    // Health check for Kubernetes probes
+    if (pathname === "/health") {
+        res.writeHead(200, {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache"
+        });
+
+        return res.end(JSON.stringify({
+            status: "healthy",
+            environment: process.env.DEPLOYMENT_COLOR || "local",
+            version: process.env.APP_VERSION || "1.0.0"
+        }));
+    }
+
+    // Identify which release is serving the request
+    if (pathname === "/version") {
+        res.writeHead(200, {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache"
+        });
+
+        return res.end(JSON.stringify({
+            app: "CloudFlow",
+            environment: process.env.DEPLOYMENT_COLOR || "local",
+            version: process.env.APP_VERSION || "1.0.0"
+        }));
+    }
+
+    if (pathname === "/favicon.ico") {
         res.writeHead(204);
         return res.end();
     }
@@ -391,6 +422,7 @@ const server = http.createServer((req, res) => {
 
     res.end(html);
 });
+
 
 server.listen(PORT, "0.0.0.0", () => {
     console.log("CloudFlow is running on port " + PORT);
