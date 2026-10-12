@@ -1,6 +1,13 @@
-
 pipeline {
     agent any
+
+    parameters {
+        choice(
+            name: 'TARGET_COLOR',
+            choices: ['blue', 'green'],
+            description: 'Release environment to update and activate'
+        )
+    }
 
     options {
         timestamps()
@@ -8,11 +15,9 @@ pipeline {
     }
 
     environment {
-        DOCKERHUB_USERNAME = 'junaid404'
         IMAGE_NAME = 'junaid404/cloudflow-dashboard'
         KUBECONFIG = 'C:/Windows/System32/config/systemprofile/.kube/config'
     }
-    
 
     stages {
         stage('Checkout') {
@@ -30,7 +35,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                bat 'docker build -t %IMAGE_NAME%:%BUILD_NUMBER% -t %IMAGE_NAME%:latest .'
+                bat 'docker build -t %IMAGE_NAME%:%BUILD_NUMBER% .'
             }
         }
 
@@ -51,52 +56,54 @@ pipeline {
                         docker push %IMAGE_NAME%:%BUILD_NUMBER%
                         if errorlevel 1 exit /b 1
 
-                        docker push %IMAGE_NAME%:latest
-                        if errorlevel 1 exit /b 1
-
                         docker logout
                     '''
                 }
             }
         }
-        stage('Diagnose Kubernetes') {
-    steps {
-        bat '''
-            whoami
-            where kubectl
-            kubectl config current-context
-            kubectl config view --minify
-            kubectl get nodes
-        '''
-    }
-}
 
-        stage('Deploy to Kubernetes') {
+        stage('Check Kubernetes Access') {
             steps {
-                bat 'kubectl apply -f k8s/deployment.yaml'
-                bat 'kubectl apply -f k8s/service.yaml'
+                bat 'kubectl config current-context'
+                bat 'kubectl get nodes'
+            }
+        }
 
-                bat 'kubectl set image deployment/cloudflow-deployment cloudflow-container=%IMAGE_NAME%:%BUILD_NUMBER%'
-                bat 'kubectl rollout status deployment/cloudflow-deployment --timeout=180s'
+        stage('Deploy Selected Environment') {
+            steps {
+                bat 'kubectl set image deployment/cloudflow-%TARGET_COLOR% cloudflow-container=%IMAGE_NAME%:%BUILD_NUMBER%'
+                bat 'kubectl rollout status deployment/cloudflow-%TARGET_COLOR% --timeout=180s'
+            }
+        }
+
+        stage('Activate Release') {
+            steps {
+                script {
+                    if (params.TARGET_COLOR == 'blue') {
+                        bat 'kubectl apply -f k8s/service-blue.yaml'
+                    } else {
+                        bat 'kubectl apply -f k8s/service-green.yaml'
+                    }
+                }
             }
         }
 
         stage('Verify Deployment') {
             steps {
                 bat 'kubectl get deployments'
-                bat 'kubectl get pods -o wide'
-                bat 'kubectl get services cloudflow-service'
+                bat 'kubectl get pods -l app=cloudflow-dashboard -o wide'
+                bat 'kubectl get service cloudflow-service'
+                bat 'kubectl get endpoints cloudflow-service'
             }
         }
-        
     }
 
     post {
         success {
-            echo 'CloudFlow pipeline completed successfully.'
+            echo "Successfully deployed and activated ${params.TARGET_COLOR}."
         }
         failure {
-            echo 'CloudFlow pipeline failed. Check the stage logs for the cause.'
+            echo 'Pipeline failed. Check the stage logs and active Service selector.'
         }
         always {
             echo 'Pipeline execution finished.'
